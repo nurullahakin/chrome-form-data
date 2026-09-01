@@ -345,6 +345,11 @@ async function saveFormData() {
     await chrome.storage.local.set({ savedForms: savedForms });
     
     showStatus('Form data saved successfully!', 'success');
+    
+    // Return to saved forms list
+    setTimeout(() => {
+      viewSavedForms();
+    }, 500);
   } catch (error) {
     console.error('Error saving form data:', error);
     showStatus('Error saving: ' + error.message, 'error');
