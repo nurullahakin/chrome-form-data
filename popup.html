@@ -16,7 +16,20 @@
 
 <body>
     <div class="container">
-        <!-- Empty window content -->
+        <div id="status"></div>
+        
+        <div id="formDataContainer">
+            <!-- Saved forms table or scan results will appear here -->
+        </div>
+        
+        <div id="saveSection" style="display: none;">
+            <button id="saveBtn" class="action-btn save-btn">Save Form Data</button>
+            <button id="cancelBtn" class="action-btn cancel-btn">Cancel</button>
+        </div>
+        
+        <div class="bottom-actions">
+            <button id="scanBtn" class="scan-btn">Scan Current Page</button>
+        </div>
     </div>
     <script src="popup.js"></script>
 </body>
