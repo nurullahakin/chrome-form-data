@@ -553,7 +553,122 @@ function fillFormOnPage(formData) {
 }
 
 async function editForm(entryIndex, formIndex) {
-  showStatus('Edit functionality coming soon!', 'info');
+  try {
+    const result = await chrome.storage.local.get(['savedForms']);
+    const savedForms = result.savedForms || [];
+    
+    if (!savedForms[entryIndex] || !savedForms[entryIndex].forms[formIndex]) {
+      showStatus('Form data not found', 'error');
+      return;
+    }
+    
+    // Store the entry and form indices for updating later
+    currentFormData = {
+      url: savedForms[entryIndex].url,
+      title: savedForms[entryIndex].title,
+      timestamp: savedForms[entryIndex].timestamp,
+      forms: [savedForms[entryIndex].forms[formIndex]],
+      editMode: true,
+      editEntryIndex: entryIndex,
+      editFormIndex: formIndex
+    };
+    
+    // Display the form data for editing
+    displayFormData(currentFormData);
+    
+    // Show update button instead of save button
+    const saveSection = document.getElementById('saveSection');
+    saveSection.style.display = 'block';
+    saveSection.innerHTML = `
+      <button id="updateBtn" class="action-btn save-btn">Update Form Data</button>
+      <button id="cancelEditBtn" class="action-btn cancel-btn">Cancel</button>
+    `;
+    
+    document.getElementById('updateBtn').addEventListener('click', updateFormData);
+    document.getElementById('cancelEditBtn').addEventListener('click', viewSavedForms);
+    
+  } catch (error) {
+    console.error('Error loading form for edit:', error);
+    showStatus('Error: ' + error.message, 'error');
+  }
+}
+
+async function updateFormData() {
+  if (!currentFormData || !currentFormData.editMode) {
+    showStatus('No form data to update', 'error');
+    return;
+  }
+  
+  try {
+    // Update URL from the input field
+    const urlInput = document.getElementById('pageUrl');
+    if (urlInput) {
+      currentFormData.url = urlInput.value;
+    }
+    
+    // Update form name from input
+    const formNameInput = document.querySelector('.form-name-input');
+    if (formNameInput && currentFormData.forms[0]) {
+      currentFormData.forms[0].formName = formNameInput.value;
+    }
+    
+    // Collect edited values
+    const visibleInputs = document.querySelectorAll('input[data-form], textarea[data-form]');
+    const visibleFieldsSet = new Set();
+    
+    visibleInputs.forEach(input => {
+      const formIndex = parseInt(input.dataset.form);
+      const fieldIndex = parseInt(input.dataset.field);
+      visibleFieldsSet.add(`${formIndex}-${fieldIndex}`);
+      
+      if (currentFormData.forms[formIndex] && currentFormData.forms[formIndex].fields[fieldIndex]) {
+        const field = currentFormData.forms[formIndex].fields[fieldIndex];
+        
+        // Update selectors if it's a selector input
+        if (input.dataset.selectorType) {
+          if (input.dataset.selectorType === 'xpath') {
+            field.xpath = input.value;
+          } else if (input.dataset.selectorType === 'selector') {
+            field.selector = input.value;
+          }
+        } else if (input.type === 'checkbox') {
+          field.checked = input.checked;
+        } else {
+          field.value = input.value;
+        }
+      }
+    });
+    
+    // Remove deleted fields
+    currentFormData.forms.forEach((form, formIndex) => {
+      form.fields = form.fields.filter((field, fieldIndex) => {
+        return visibleFieldsSet.has(`${formIndex}-${fieldIndex}`);
+      });
+    });
+    
+    // Get existing saved forms
+    const result = await chrome.storage.local.get(['savedForms']);
+    const savedForms = result.savedForms || [];
+    
+    // Update the specific form
+    if (savedForms[currentFormData.editEntryIndex]) {
+      savedForms[currentFormData.editEntryIndex].url = currentFormData.url;
+      savedForms[currentFormData.editEntryIndex].forms[currentFormData.editFormIndex] = currentFormData.forms[0];
+    }
+    
+    // Save back to storage
+    await chrome.storage.local.set({ savedForms: savedForms });
+    
+    showStatus('Form data updated successfully!', 'success');
+    
+    // Return to saved forms list
+    setTimeout(() => {
+      viewSavedForms();
+    }, 500);
+  } catch (error) {
+    console.error('Error updating form data:', error);
+    showStatus('Error updating: ' + error.message, 'error');
+  }
 }
 
 async function deleteForm(entryIndex, formIndex) {
