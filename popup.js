@@ -3,35 +3,18 @@ let currentFormData = null;
 
 document.addEventListener('DOMContentLoaded', function() {
   const scanBtn = document.getElementById('scanBtn');
-  const saveBtn = document.getElementById('saveBtn');
   const cancelBtn = document.getElementById('cancelBtn');
   
   scanBtn.addEventListener('click', extractFormData);
-  saveBtn.addEventListener('click', saveFormData);
   cancelBtn.addEventListener('click', viewSavedForms);
   
   // Automatically load saved forms list on popup open
   viewSavedForms();
 });
 
-function showSaveSection() {
-  const saveSection = document.getElementById('saveSection');
-  saveSection.classList.remove('hidden');
-}
-
 function hideSaveSection() {
   const saveSection = document.getElementById('saveSection');
   saveSection.classList.add('hidden');
-}
-
-function renderDefaultSaveActions() {
-  const saveSection = document.getElementById('saveSection');
-  saveSection.innerHTML = `
-    <button id="saveBtn" class="action-btn save-btn my-2.5 mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-700">Save Form Data</button>
-    <button id="cancelBtn" class="action-btn cancel-btn my-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-600">Cancel</button>
-  `;
-  document.getElementById('saveBtn').addEventListener('click', saveFormData);
-  document.getElementById('cancelBtn').addEventListener('click', viewSavedForms);
 }
 
 async function extractFormData() {
@@ -74,7 +57,7 @@ async function extractFormData() {
       };
       
       displayFormData(currentFormData);
-      showSaveSection();
+      hideSaveSection();
       showStatus(`Found ${currentFormData.forms.length} form(s)`, 'info');
     } else {
       document.getElementById('formDataContainer').innerHTML = '<p class="text-gray-500">No forms found on this page.</p>';
@@ -205,20 +188,17 @@ function extractFormsFromPage() {
 function displayFormData(data) {
   const container = document.getElementById('formDataContainer');
   container.innerHTML = '';
-
-  if (!data.editMode) {
-    renderDefaultSaveActions();
-  }
+  hideSaveSection();
   
   // Hide scan button when on scan page
   document.querySelector('.bottom-actions').classList.add('hidden');
   
   // Display URL as editable input
   const urlSection = document.createElement('div');
-  urlSection.className = 'url-section mb-[15px] rounded-[4px] border border-sky-200 bg-sky-50 p-3';
+  urlSection.className = 'url-section mb-[15px] flex items-center gap-2 rounded-[4px] border border-sky-200 bg-sky-50 p-3';
   urlSection.innerHTML = `
-    <strong class="mb-[5px] block text-[13px] text-gray-800">Page URL:</strong>
-    <input type="text" id="pageUrl" class="url-input box-border w-full max-w-full rounded-[3px] border border-sky-200 px-2 py-1.5 text-xs text-blue-700 focus:border-green-600 focus:outline-none" value="${data.url}">
+    <strong class="shrink-0 text-[13px] text-gray-800">Page URL:</strong>
+    <input type="text" id="pageUrl" class="url-input box-border w-full max-w-full rounded-[3px] border border-sky-200 bg-white px-2 py-1.5 text-xs text-blue-700 focus:border-green-600 focus:outline-none" value="${data.url}">
   `;
   container.appendChild(urlSection);
   
@@ -234,8 +214,9 @@ function displayFormData(data) {
     
     const formTitle = form.formName || form.formId || `Form ${form.formIndex + 1}`;
     let html = `
-      <div class="form-name-container mb-3">
-        <input type="text" class="form-name-input box-border w-full max-w-full rounded-[4px] border-2 border-green-600 bg-green-50 px-2.5 py-2 text-base font-bold text-gray-600 focus:border-green-700 focus:bg-white focus:outline-none" data-form-index="${formIndex}" value="${formTitle}" placeholder="Form Name">
+      <div class="form-name-container mb-3 flex items-center gap-2">
+        <label class="shrink-0 text-[13px] font-bold text-gray-800">Form Name</label>
+        <input type="text" class="form-name-input box-border w-full max-w-full rounded-[3px] border border-gray-300 bg-white px-2 py-1.5 text-[13px] font-bold text-gray-800 focus:border-green-600 focus:outline-none" data-form-index="${formIndex}" value="${formTitle}" placeholder="Form Name">
       </div>
     `;
     
@@ -246,7 +227,7 @@ function displayFormData(data) {
         const fieldLabel = field.name || field.id || `${field.type} field`;
         const dataAttr = `data-form="${formIndex}" data-field="${fieldIndex}"`;
         
-        html += `<div class="field-item relative my-2 rounded-[3px] bg-white p-2 text-[13px]" ${dataAttr}>`;
+        html += `<div class="field-item relative my-2 rounded-[4px] border border-gray-300 bg-white p-2 shadow-sm text-[13px]" ${dataAttr}>`;
         html += `<button class="delete-field-btn absolute right-2 top-2 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Delete</button>`;
         html += `<div class="field-name mb-[3px] font-bold text-gray-800">${fieldLabel} (${field.type})</div>`;
         
@@ -281,9 +262,42 @@ function displayFormData(data) {
         html += `</div>`;
       });
     }
+
+    html += `
+      <div class="mt-4 text-left">
+        ${data.editMode
+          ? '<button class="update-form-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Update Form Data</button>'
+          : `<button class="save-form-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700" data-form-index="${formIndex}">Save This Form</button>`}
+        <button class="cancel-form-btn inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-600">Cancel</button>
+      </div>
+    `;
     
     formSection.innerHTML = html;
     container.appendChild(formSection);
+  });
+  
+  const saveFormButtons = container.querySelectorAll('.save-form-btn');
+  saveFormButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      saveFormData(parseInt(this.dataset.formIndex));
+    });
+  });
+
+  const updateFormButtons = container.querySelectorAll('.update-form-btn');
+  updateFormButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      updateFormData();
+    });
+  });
+
+  const cancelFormButtons = container.querySelectorAll('.cancel-form-btn');
+  cancelFormButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      viewSavedForms();
+    });
   });
   
   // Add delete button event listeners
@@ -302,7 +316,7 @@ function displayFormData(data) {
   });
 }
 
-async function saveFormData() {
+async function saveFormData(formIndexToSave = null) {
   if (!currentFormData) {
     showStatus('No form data to save', 'error');
     return;
@@ -362,8 +376,22 @@ async function saveFormData() {
     const result = await chrome.storage.local.get(['savedForms']);
     const savedForms = result.savedForms || [];
     
-    // Add the new form data
-    savedForms.push(currentFormData);
+    const formsToSave = Number.isInteger(formIndexToSave)
+      ? [currentFormData.forms[formIndexToSave]].filter(Boolean)
+      : currentFormData.forms;
+
+    if (formsToSave.length === 0) {
+      showStatus('No form data to save', 'error');
+      return;
+    }
+
+    // Add the selected form data
+    savedForms.push({
+      url: currentFormData.url,
+      title: currentFormData.title,
+      timestamp: new Date().toISOString(),
+      forms: formsToSave
+    });
     
     // Save back to storage
     await chrome.storage.local.set({ savedForms: savedForms });
@@ -604,17 +632,6 @@ async function editForm(entryIndex, formIndex) {
     
     // Display the form data for editing
     displayFormData(currentFormData);
-    
-    // Show update button instead of save button
-    const saveSection = document.getElementById('saveSection');
-    showSaveSection();
-    saveSection.innerHTML = `
-      <button id="updateBtn" class="action-btn save-btn my-2.5 mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-700">Update Form Data</button>
-      <button id="cancelEditBtn" class="action-btn cancel-btn my-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-600">Cancel</button>
-    `;
-    
-    document.getElementById('updateBtn').addEventListener('click', updateFormData);
-    document.getElementById('cancelEditBtn').addEventListener('click', viewSavedForms);
     
   } catch (error) {
     console.error('Error loading form for edit:', error);
