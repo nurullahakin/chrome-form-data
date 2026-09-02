@@ -14,12 +14,32 @@ document.addEventListener('DOMContentLoaded', function() {
   viewSavedForms();
 });
 
+function showSaveSection() {
+  const saveSection = document.getElementById('saveSection');
+  saveSection.classList.remove('hidden');
+}
+
+function hideSaveSection() {
+  const saveSection = document.getElementById('saveSection');
+  saveSection.classList.add('hidden');
+}
+
+function renderDefaultSaveActions() {
+  const saveSection = document.getElementById('saveSection');
+  saveSection.innerHTML = `
+    <button id="saveBtn" class="action-btn save-btn my-2.5 mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-700">Save Form Data</button>
+    <button id="cancelBtn" class="action-btn cancel-btn my-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-600">Cancel</button>
+  `;
+  document.getElementById('saveBtn').addEventListener('click', saveFormData);
+  document.getElementById('cancelBtn').addEventListener('click', viewSavedForms);
+}
+
 async function extractFormData() {
   try {
     // Check if chrome.scripting is available
     if (!chrome.scripting) {
       showStatus('Error: Extension API not available. Please reload the extension.', 'error');
-      document.getElementById('formDataContainer').innerHTML = '<p style="color: #999;">Please reload the extension and try again.</p>';
+      document.getElementById('formDataContainer').innerHTML = '<p class="text-gray-500">Please reload the extension and try again.</p>';
       return;
     }
     
@@ -28,14 +48,14 @@ async function extractFormData() {
     
     if (!tab || !tab.id) {
       showStatus('Error: No active tab found', 'error');
-      document.getElementById('formDataContainer').innerHTML = '<p style="color: #999;">No active tab found.</p>';
+      document.getElementById('formDataContainer').innerHTML = '<p class="text-gray-500">No active tab found.</p>';
       return;
     }
     
     // Check if the tab URL is accessible
     if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('edge://')) {
       showStatus('Cannot access browser internal pages', 'error');
-      document.getElementById('formDataContainer').innerHTML = '<p style="color: #999;">Cannot extract forms from browser internal pages.</p>';
+      document.getElementById('formDataContainer').innerHTML = '<p class="text-gray-500">Cannot extract forms from browser internal pages.</p>';
       return;
     }
     
@@ -54,16 +74,16 @@ async function extractFormData() {
       };
       
       displayFormData(currentFormData);
-      document.getElementById('saveSection').style.display = 'block';
+      showSaveSection();
       showStatus(`Found ${currentFormData.forms.length} form(s)`, 'info');
     } else {
-      document.getElementById('formDataContainer').innerHTML = '<p style="color: #999;">No forms found on this page.</p>';
+      document.getElementById('formDataContainer').innerHTML = '<p class="text-gray-500">No forms found on this page.</p>';
       showStatus('No forms found on this page', 'info');
-      document.getElementById('saveSection').style.display = 'none';
+      hideSaveSection();
     }
   } catch (error) {
     console.error('Error extracting form data:', error);
-    document.getElementById('formDataContainer').innerHTML = `<p style="color: #d9534f;">Error: ${error.message}</p>`;
+    document.getElementById('formDataContainer').innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
     showStatus('Error: ' + error.message, 'error');
   }
 }
@@ -185,73 +205,77 @@ function extractFormsFromPage() {
 function displayFormData(data) {
   const container = document.getElementById('formDataContainer');
   container.innerHTML = '';
+
+  if (!data.editMode) {
+    renderDefaultSaveActions();
+  }
   
   // Hide scan button when on scan page
-  document.querySelector('.bottom-actions').style.display = 'none';
+  document.querySelector('.bottom-actions').classList.add('hidden');
   
   // Display URL as editable input
   const urlSection = document.createElement('div');
-  urlSection.className = 'url-section';
+  urlSection.className = 'url-section mb-[15px] rounded-[4px] border border-sky-200 bg-sky-50 p-3';
   urlSection.innerHTML = `
-    <strong>Page URL:</strong>
-    <input type="text" id="pageUrl" class="url-input" value="${data.url}">
+    <strong class="mb-[5px] block text-[13px] text-gray-800">Page URL:</strong>
+    <input type="text" id="pageUrl" class="url-input box-border w-full max-w-full rounded-[3px] border border-sky-200 px-2 py-1.5 text-xs text-blue-700 focus:border-green-600 focus:outline-none" value="${data.url}">
   `;
   container.appendChild(urlSection);
   
   if (!data.forms || data.forms.length === 0) {
-    container.innerHTML += '<p style="color: #999;">No forms found</p>';
+    container.innerHTML += '<p class="text-gray-500">No forms found</p>';
     return;
   }
   
   data.forms.forEach((form, formIndex) => {
     const formSection = document.createElement('div');
-    formSection.className = 'form-section';
+    formSection.className = 'form-section mb-[15px] rounded-[4px] border border-gray-300 bg-gray-50 p-[15px]';
     formSection.dataset.formIndex = formIndex;
     
     const formTitle = form.formName || form.formId || `Form ${form.formIndex + 1}`;
     let html = `
-      <div class="form-name-container">
-        <input type="text" class="form-name-input" data-form-index="${formIndex}" value="${formTitle}" placeholder="Form Name">
+      <div class="form-name-container mb-3">
+        <input type="text" class="form-name-input box-border w-full max-w-full rounded-[4px] border-2 border-green-600 bg-green-50 px-2.5 py-2 text-base font-bold text-gray-600 focus:border-green-700 focus:bg-white focus:outline-none" data-form-index="${formIndex}" value="${formTitle}" placeholder="Form Name">
       </div>
     `;
     
     if (form.fields.length === 0) {
-      html += '<p style="color: #999;">No fields found</p>';
+      html += '<p class="text-gray-500">No fields found</p>';
     } else {
       form.fields.forEach((field, fieldIndex) => {
         const fieldLabel = field.name || field.id || `${field.type} field`;
         const dataAttr = `data-form="${formIndex}" data-field="${fieldIndex}"`;
         
-        html += `<div class="field-item" ${dataAttr}>`;
-        html += `<button class="delete-field-btn" ${dataAttr}>Delete</button>`;
-        html += `<div class="field-name">${fieldLabel} (${field.type})</div>`;
+        html += `<div class="field-item relative my-2 rounded-[3px] bg-white p-2 text-[13px]" ${dataAttr}>`;
+        html += `<button class="delete-field-btn absolute right-2 top-2 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Delete</button>`;
+        html += `<div class="field-name mb-[3px] font-bold text-gray-800">${fieldLabel} (${field.type})</div>`;
         
         // Show selector information as editable inputs
-        html += `<div class="field-selector">`;
-        html += `<div class="selector-row">`;
-        html += `<span class="selector-label">XPath:</span>`;
-        html += `<input type="text" class="selector-input xpath-input" value="${(field.xpath || '').replace(/"/g, '&quot;')}" ${dataAttr} data-selector-type="xpath" placeholder="XPath selector">`;
+        html += `<div class="field-selector my-1.5 box-border rounded-[3px] bg-gray-100 p-1.5 text-[11px] text-gray-600">`;
+        html += `<div class="selector-row mb-1 flex items-center gap-1">`;
+        html += `<span class="selector-label min-w-[55px] text-[11px] font-bold text-gray-600">XPath:</span>`;
+        html += `<input type="text" class="selector-input xpath-input min-w-0 max-w-full flex-1 rounded-[2px] border border-gray-300 bg-white px-1.5 py-0.5 font-mono text-[10px] focus:border-green-600 focus:outline-none" value="${(field.xpath || '').replace(/"/g, '&quot;')}" ${dataAttr} data-selector-type="xpath" placeholder="XPath selector">`;
         html += `</div>`;
-        html += `<div class="selector-row">`;
-        html += `<span class="selector-label">CSS:</span>`;
-        html += `<input type="text" class="selector-input css-input" value="${(field.selector || '').replace(/"/g, '&quot;')}" ${dataAttr} data-selector-type="selector" placeholder="CSS selector">`;
+        html += `<div class="selector-row flex items-center gap-1">`;
+        html += `<span class="selector-label min-w-[55px] text-[11px] font-bold text-gray-600">CSS:</span>`;
+        html += `<input type="text" class="selector-input css-input min-w-0 max-w-full flex-1 rounded-[2px] border border-gray-300 bg-white px-1.5 py-0.5 font-mono text-[10px] focus:border-green-600 focus:outline-none" value="${(field.selector || '').replace(/"/g, '&quot;')}" ${dataAttr} data-selector-type="selector" placeholder="CSS selector">`;
         html += `</div>`;
         html += `</div>`;
         
         if (field.type === 'checkbox' || field.type === 'radio') {
           html += `
-            <label class="checkbox-label">
-              <input type="checkbox" ${field.checked ? 'checked' : ''} ${dataAttr}>
+            <label class="checkbox-label mt-1 flex cursor-pointer items-center">
+              <input type="checkbox" class="mr-1 cursor-pointer" ${field.checked ? 'checked' : ''} ${dataAttr}>
               ${field.checked ? 'Checked' : 'Unchecked'}
             </label>
           `;
         } else if (field.type === 'textarea') {
-          html += `<textarea rows="3" ${dataAttr}>${field.value || ''}</textarea>`;
+          html += `<textarea rows="3" class="mt-1 box-border w-full max-w-full rounded-[3px] border border-gray-300 px-2 py-1.5 text-[13px] focus:border-green-600 focus:outline-none" ${dataAttr}>${field.value || ''}</textarea>`;
         } else if (field.type !== 'file') {
           const inputType = field.type === 'password' ? 'text' : 'text';
-          html += `<input type="${inputType}" value="${(field.value || '').replace(/"/g, '&quot;')}" ${dataAttr} placeholder="Empty">`;
+          html += `<input type="${inputType}" class="mt-1 box-border w-full max-w-full rounded-[3px] border border-gray-300 px-2 py-1.5 text-[13px] focus:border-green-600 focus:outline-none" value="${(field.value || '').replace(/"/g, '&quot;')}" ${dataAttr} placeholder="Empty">`;
         } else {
-          html += `<div class="field-value"><em>File field - not captured</em></div>`;
+          html += `<div class="field-value break-words text-gray-600"><em>File field - not captured</em></div>`;
         }
         
         html += `</div>`;
@@ -359,12 +383,17 @@ async function saveFormData() {
 function showStatus(message, type) {
   const statusDiv = document.getElementById('status');
   statusDiv.textContent = message;
-  statusDiv.className = type;
+  const statusClasses = {
+    success: 'mb-2.5 rounded-[4px] border border-green-200 bg-green-100 p-2.5 text-center text-[13px] text-green-900',
+    error: 'mb-2.5 rounded-[4px] border border-red-200 bg-red-100 p-2.5 text-center text-[13px] text-red-900',
+    info: 'mb-2.5 rounded-[4px] border border-sky-200 bg-sky-100 p-2.5 text-center text-[13px] text-sky-900'
+  };
+  statusDiv.className = statusClasses[type] || statusClasses.info;
   
   // Clear status after 3 seconds
   setTimeout(() => {
     statusDiv.textContent = '';
-    statusDiv.className = '';
+    statusDiv.className = 'hidden';
   }, 3000);
 }
 
@@ -374,25 +403,25 @@ async function viewSavedForms() {
     const savedForms = result.savedForms || [];
     
     // Show scan button when viewing saved forms
-    document.querySelector('.bottom-actions').style.display = 'block';
+    document.querySelector('.bottom-actions').classList.remove('hidden');
     
     const container = document.getElementById('formDataContainer');
-    document.getElementById('saveSection').style.display = 'none';
+    hideSaveSection();
     
     if (savedForms.length === 0) {
-      container.innerHTML = '<p class="info-text">No saved forms yet. Scan a page and save form data to see it here.</p>';
+      container.innerHTML = '<p class="info-text px-5 py-[30px] text-center text-sm text-gray-600">No saved forms yet. Scan a page and save form data to see it here.</p>';
       return;
     }
     
     let tableHtml = `
-      <table class="saved-forms-table">
+      <table class="saved-forms-table mt-2.5 w-full border-collapse text-[13px]">
         <thead>
           <tr>
-            <th>URL</th>
-            <th>Form Name</th>
-            <th>Fields</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">URL</th>
+            <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Form Name</th>
+            <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Fields</th>
+            <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Created</th>
+            <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -411,15 +440,15 @@ async function viewSavedForms() {
         });
         
         tableHtml += `
-          <tr>
-            <td class="url-cell" title="${formData.url}">${formData.url}</td>
-            <td>${formName}</td>
-            <td>${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
-            <td class="date-cell">${date}</td>
-            <td class="actions-cell">
-              <button class="table-btn fill-btn" data-entry="${entryIndex}" data-form="${formIndex}">Fill</button>
-              <button class="table-btn edit-btn" data-entry="${entryIndex}" data-form="${formIndex}">Edit</button>
-              <button class="table-btn delete-btn" data-entry="${entryIndex}" data-form="${formIndex}">Delete</button>
+          <tr class="hover:bg-gray-100">
+            <td class="url-cell max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-blue-700" title="${formData.url}">${formData.url}</td>
+            <td class="border-b border-gray-300 px-2 py-2 align-middle">${formName}</td>
+            <td class="border-b border-gray-300 px-2 py-2 align-middle">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
+            <td class="date-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-gray-600">${date}</td>
+            <td class="actions-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle">
+              <button class="table-btn fill-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-green-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-green-700" data-entry="${entryIndex}" data-form="${formIndex}">Fill</button>
+              <button class="table-btn edit-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-amber-400 px-2 py-1 text-[11px] font-bold text-gray-900 hover:bg-amber-500" data-entry="${entryIndex}" data-form="${formIndex}">Edit</button>
+              <button class="table-btn delete-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" data-entry="${entryIndex}" data-form="${formIndex}">Delete</button>
             </td>
           </tr>
         `;
@@ -578,10 +607,10 @@ async function editForm(entryIndex, formIndex) {
     
     // Show update button instead of save button
     const saveSection = document.getElementById('saveSection');
-    saveSection.style.display = 'block';
+    showSaveSection();
     saveSection.innerHTML = `
-      <button id="updateBtn" class="action-btn save-btn">Update Form Data</button>
-      <button id="cancelEditBtn" class="action-btn cancel-btn">Cancel</button>
+      <button id="updateBtn" class="action-btn save-btn my-2.5 mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-700">Update Form Data</button>
+      <button id="cancelEditBtn" class="action-btn cancel-btn my-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-600">Cancel</button>
     `;
     
     document.getElementById('updateBtn').addEventListener('click', updateFormData);
