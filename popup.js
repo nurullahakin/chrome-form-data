@@ -226,10 +226,14 @@ function displayFormData(data) {
       form.fields.forEach((field, fieldIndex) => {
         const fieldLabel = field.name || field.id || `${field.type} field`;
         const dataAttr = `data-form="${formIndex}" data-field="${fieldIndex}"`;
+        const isPasswordField = field.type === 'password';
+        const fieldItemClass = isPasswordField
+          ? 'field-item relative my-2 rounded-[4px] border border-red-300 bg-red-50 p-2 shadow-sm text-[13px]'
+          : 'field-item relative my-2 rounded-[4px] border border-gray-300 bg-white p-2 shadow-sm text-[13px]';
         
-        html += `<div class="field-item relative my-2 rounded-[4px] border border-gray-300 bg-white p-2 shadow-sm text-[13px]" ${dataAttr}>`;
+        html += `<div class="${fieldItemClass}" ${dataAttr}>`;
         html += `<button class="delete-field-btn absolute right-2 top-2 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Delete</button>`;
-        html += `<div class="field-name mb-[3px] font-bold text-gray-800">${fieldLabel} (${field.type})</div>`;
+        html += `<div class="field-name mb-[3px] font-bold ${isPasswordField ? 'text-red-700' : 'text-gray-800'}">${fieldLabel} (${field.type})</div>`;
         
         // Show selector information as editable inputs
         html += `<div class="field-selector my-1.5 box-border rounded-[3px] bg-gray-100 p-1.5 text-[11px] text-gray-600">`;
@@ -252,6 +256,13 @@ function displayFormData(data) {
           `;
         } else if (field.type === 'textarea') {
           html += `<textarea rows="3" class="mt-1 box-border w-full max-w-full rounded-[3px] border border-gray-300 px-2 py-1.5 text-[13px] focus:border-green-600 focus:outline-none" ${dataAttr}>${field.value || ''}</textarea>`;
+        } else if (isPasswordField) {
+          html += `
+            <div class="mt-1 flex items-center gap-2">
+              <input type="text" class="password-value-input box-border min-w-0 flex-1 rounded-[3px] border border-red-300 bg-white px-2 py-1.5 text-[13px] focus:border-red-500 focus:outline-none" value="${(field.value || '').replace(/"/g, '&quot;')}" ${dataAttr} placeholder="Empty">
+              <button class="clear-password-btn shrink-0 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Clear</button>
+            </div>
+          `;
         } else if (field.type !== 'file') {
           const inputType = field.type === 'password' ? 'text' : 'text';
           html += `<input type="${inputType}" class="mt-1 box-border w-full max-w-full rounded-[3px] border border-gray-300 px-2 py-1.5 text-[13px] focus:border-green-600 focus:outline-none" value="${(field.value || '').replace(/"/g, '&quot;')}" ${dataAttr} placeholder="Empty">`;
@@ -297,6 +308,20 @@ function displayFormData(data) {
     btn.addEventListener('click', function(e) {
       e.preventDefault();
       viewSavedForms();
+    });
+  });
+
+  const clearPasswordButtons = container.querySelectorAll('.clear-password-btn');
+  clearPasswordButtons.forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const formIndex = this.dataset.form;
+      const fieldIndex = this.dataset.field;
+      const passwordInput = document.querySelector(`.password-value-input[data-form="${formIndex}"][data-field="${fieldIndex}"]`);
+
+      if (passwordInput) {
+        passwordInput.value = '';
+      }
     });
   });
   
