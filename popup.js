@@ -126,12 +126,15 @@ function extractFormsFromPage() {
   const formDataArray = [];
   
   forms.forEach((form, formIndex) => {
+    // Use getAttribute instead of the DOM property: a named form control (e.g. an
+    // input named "name"/"id"/"action"/"method") shadows these properties on the
+    // form element, which would otherwise leak a non-serializable element here.
     const formData = {
       formIndex: formIndex,
-      formId: form.id || `form-${formIndex}`,
-      formName: form.name || '',
-      action: form.action || '',
-      method: form.method || 'get',
+      formId: form.getAttribute('id') || `form-${formIndex}`,
+      formName: form.getAttribute('name') || '',
+      action: form.getAttribute('action') || '',
+      method: form.getAttribute('method') || 'get',
       fields: []
     };
     
