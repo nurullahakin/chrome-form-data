@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Chrome Form Data",
+    "name": "Form Data",
     "version": "0.5.0",
-    "description": "A simple Chrome extension",
+    "description": "Save and manage form data",
     "icons": {
         "16": "icons/16x16.png",
         "32": "icons/32x32.png",
@@ -17,7 +17,7 @@
             "128": "icons/128x128.png"
         },
         "default_popup": "popup.html",
-        "default_title": "Chrome Form Data"
+        "default_title": "Form Data"
     },
     "permissions": [
         "activeTab",
