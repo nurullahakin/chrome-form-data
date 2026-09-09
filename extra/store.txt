@@ -1,0 +1,14 @@
+Description
+Save, edit, and fill forms.
+
+Single purpose
+Make repetitive form filling easier.
+
+activeTab justification
+Page needs to be accessed to find forms and values.
+
+storage justification
+Stored form values needs to be reused.
+
+scripting justification
+Forms need to be read and filled.
