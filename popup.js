@@ -497,7 +497,7 @@ async function viewSavedForms() {
         
         tableHtml += `
           <tr class="hover:bg-gray-100">
-            <td class="url-cell max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-blue-700" title="${formData.url}">${formData.url}</td>
+            <td class="url-cell max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-blue-700" title="${formData.url}">${/^https?:\/\//i.test(formData.url) ? `<a href="${formData.url}" class="url-link text-blue-700 hover:underline">${formData.url}</a>` : formData.url}</td>
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${formName}</td>
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
             <td class="date-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-gray-600">${date}</td>
@@ -518,6 +518,14 @@ async function viewSavedForms() {
     
     container.innerHTML = tableHtml;
     
+    // Open URLs in a new tab
+    container.querySelectorAll('.url-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        chrome.tabs.create({ url: link.href });
+      });
+    });
+
     // Add event listeners for action buttons
     container.querySelectorAll('.fill-btn').forEach(btn => {
       btn.addEventListener('click', () => fillForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
