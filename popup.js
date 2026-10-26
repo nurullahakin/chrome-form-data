@@ -593,10 +593,13 @@ async function viewSavedForms() {
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
             <td class="date-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-gray-600">${date}</td>
             <td class="actions-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle">
-              <button class="table-btn fill-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-green-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-green-700" data-entry="${entryIndex}" data-form="${formIndex}">Fill</button>
-              <button class="table-btn view-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-sky-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-sky-700" data-entry="${entryIndex}" data-form="${formIndex}">View</button>
-              <button class="table-btn edit-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-amber-400 px-2 py-1 text-[11px] font-bold text-gray-900 hover:bg-amber-500" data-entry="${entryIndex}" data-form="${formIndex}">Edit</button>
-              <button class="table-btn delete-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" data-entry="${entryIndex}" data-form="${formIndex}">Delete</button>
+              <div class="flex gap-1">
+              <button class="table-btn fill-btn cursor-pointer rounded-[3px] border-0 bg-green-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-green-700" data-entry="${entryIndex}" data-form="${formIndex}">Fill</button>
+              <button class="table-btn submit-btn cursor-pointer rounded-[3px] border-0 bg-green-800 px-2 py-1 text-[11px] font-bold text-white hover:bg-green-900" data-entry="${entryIndex}" data-form="${formIndex}" title="Fill and submit the form">Submit</button>
+              <button class="table-btn view-btn cursor-pointer rounded-[3px] border-0 bg-sky-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-sky-700" data-entry="${entryIndex}" data-form="${formIndex}">View</button>
+              <button class="table-btn edit-btn cursor-pointer rounded-[3px] border-0 bg-amber-400 px-2 py-1 text-[11px] font-bold text-gray-900 hover:bg-amber-500" data-entry="${entryIndex}" data-form="${formIndex}">Edit</button>
+              <button class="table-btn delete-btn cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" data-entry="${entryIndex}" data-form="${formIndex}">Delete</button>
+              </div>
             </td>
           </tr>
         `;
@@ -621,6 +624,10 @@ async function viewSavedForms() {
     // Add event listeners for action buttons
     container.querySelectorAll('.fill-btn').forEach(btn => {
       btn.addEventListener('click', () => fillForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
+    });
+    
+    container.querySelectorAll('.submit-btn').forEach(btn => {
+      btn.addEventListener('click', () => fillForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form), true));
     });
     
     container.querySelectorAll('.view-btn').forEach(btn => {
@@ -709,7 +716,7 @@ function setupRowDragAndDrop(tbody, savedForms) {
   });
 }
 
-async function fillForm(entryIndex, formIndex) {
+async function fillForm(entryIndex, formIndex, submit = false) {
   try {
     const result = await chrome.storage.local.get(['savedForms']);
     const savedForms = result.savedForms || [];
@@ -733,11 +740,20 @@ async function fillForm(entryIndex, formIndex) {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: fillFormOnPage,
-      args: [formData]
+      args: [formData, submit]
     });
     
-    if (results && results[0] && results[0].result) {
-      showStatus(`Filled ${results[0].result} field(s)`, 'success');
+    const fillResult = results && results[0] && results[0].result;
+    if (fillResult && fillResult.filledCount) {
+      if (!submit) {
+        showStatus(`Filled ${fillResult.filledCount} field(s)`, 'success');
+      } else if (fillResult.submitted) {
+        showStatus(`Filled ${fillResult.filledCount} field(s) and submitted`, 'success');
+        // Close the popup once the success message has been seen
+        setTimeout(() => window.close(), 500);
+      } else {
+        showStatus(`Filled ${fillResult.filledCount} field(s), but no form to submit was found`, 'error');
+      }
     } else {
       showStatus('Could not fill form fields', 'error');
     }
@@ -747,8 +763,9 @@ async function fillForm(entryIndex, formIndex) {
   }
 }
 
-function fillFormOnPage(formData) {
+async function fillFormOnPage(formData, submit) {
   let filledCount = 0;
+  let targetForm = null;
   
   formData.fields.forEach(fieldData => {
     let element = null;
@@ -803,10 +820,25 @@ function fillFormOnPage(formData) {
       element.dispatchEvent(new Event('change', { bubbles: true }));
       
       filledCount++;
+      targetForm = targetForm || element.form || element.closest('form');
     }
   });
   
-  return filledCount;
+  if (!submit || filledCount === 0 || !targetForm) {
+    return { filledCount, submitted: false };
+  }
+  
+  // Give frameworks (React, Vue, ...) a moment to process the input events
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // requestSubmit runs validation and submit handlers, like clicking the submit button
+  if (typeof targetForm.requestSubmit === 'function') {
+    targetForm.requestSubmit();
+  } else {
+    targetForm.submit();
+  }
+  
+  return { filledCount, submitted: true };
 }
 
 // Read-only summary of a saved form as label: value pairs
