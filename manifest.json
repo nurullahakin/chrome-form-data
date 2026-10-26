@@ -11,10 +11,10 @@
     },
     "action": {
         "default_icon": {
-            "16": "icons/16x16.png",
-            "32": "icons/32x32.png",
-            "48": "icons/48x48.png",
-            "128": "icons/128x128.png"
+            "16": "icons/p8_16x16.png",
+            "32": "icons/p8_32x32.png",
+            "48": "icons/p8_48x48.png",
+            "128": "icons/p8_128x128.png"
         },
         "default_popup": "popup.html",
         "default_title": "Form Data"
