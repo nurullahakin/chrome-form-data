@@ -131,7 +131,73 @@ function extractFormsFromPage() {
     
     return selector;
   }
-  
+
+  // Helper function to find a human-readable label for an element
+  function findLabel(element) {
+    const clean = text => (text || '').replace(/\s+/g, ' ').trim();
+
+    // Label explicitly associated with an element
+    function associatedLabel(el) {
+      // aria-labelledby takes precedence, as in the accessibility tree
+      const labelledBy = el.getAttribute('aria-labelledby');
+      if (labelledBy) {
+        const text = clean(labelledBy.split(/\s+/)
+          .map(id => document.getElementById(id)?.textContent)
+          .join(' '));
+        if (text) return text;
+      }
+
+      const ariaLabel = clean(el.getAttribute('aria-label'));
+      if (ariaLabel) return ariaLabel;
+
+      // <label for="..."> and wrapping <label>, excluding the control's own text
+      for (const label of el.labels || []) {
+        const copy = label.cloneNode(true);
+        copy.querySelectorAll('input, textarea, select').forEach(e => e.remove());
+        const text = clean(copy.textContent);
+        if (text) return text;
+      }
+
+      return '';
+    }
+
+    const ownLabel = associatedLabel(element);
+    if (ownLabel) return ownLabel;
+
+    // Custom control (e.g. <button role="combobox">) rendered next to a hidden native
+    // input; the label is associated with the custom control instead
+    for (const sibling of [element.previousElementSibling, element.nextElementSibling]) {
+      if (sibling && sibling.hasAttribute('role')) {
+        const text = associatedLabel(sibling);
+        if (text) return text;
+      }
+    }
+
+    // Sibling <label>; checkboxes and radios usually have it after
+    const isToggle = element.type === 'checkbox' || element.type === 'radio';
+    const directions = isToggle
+      ? ['nextElementSibling', 'previousElementSibling']
+      : ['previousElementSibling', 'nextElementSibling'];
+    for (const direction of directions) {
+      let sibling = element[direction];
+      while (sibling) {
+        // Stop at another control, since a label beyond it belongs to that control
+        if (sibling.matches('input, textarea, select')) break;
+        // Skip labels bound to another form control, but accept ones bound to a custom
+        // control (e.g. <button role="checkbox"> next to a hidden native input)
+        const boundToOtherControl = sibling.control && sibling.control !== element &&
+          sibling.control.matches('input, textarea, select');
+        if (sibling.tagName === 'LABEL' && !boundToOtherControl) {
+          const text = clean(sibling.textContent);
+          if (text) return text;
+        }
+        sibling = sibling[direction];
+      }
+    }
+
+    return clean(element.placeholder) || clean(element.title);
+  }
+
   const forms = document.querySelectorAll('form');
   const formDataArray = [];
   
@@ -171,6 +237,7 @@ function extractFormsFromPage() {
         type: input.type || input.tagName.toLowerCase(),
         name: input.name || '',
         id: input.id || '',
+        label: findLabel(input),
         value: '',
         selector: generateSelector(input),
         xpath: generateXPath(input)
@@ -237,7 +304,10 @@ function displayFormData(data) {
       html += '<p class="text-gray-500">No fields found</p>';
     } else {
       form.fields.forEach((field, fieldIndex) => {
-        const fieldLabel = field.name || field.id || `${field.type} field`;
+        const fieldIdentifier = field.name || field.id || `${field.type} field`;
+        const fieldLabel = field.label
+          ? field.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          : '';
         const dataAttr = `data-form="${formIndex}" data-field="${fieldIndex}"`;
         const isPasswordField = field.type === 'password';
         const fieldItemClass = isPasswordField
@@ -246,7 +316,7 @@ function displayFormData(data) {
         
         html += `<div class="${fieldItemClass}" ${dataAttr}>`;
         html += `<button class="delete-field-btn absolute right-2 top-2 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Delete</button>`;
-        html += `<div class="field-name mb-[3px] font-bold ${isPasswordField ? 'text-red-700' : 'text-gray-800'}">${fieldLabel} (${field.type})</div>`;
+        html += `<div class="field-name mb-[3px] font-bold ${isPasswordField ? 'text-red-700' : 'text-gray-800'}">${fieldLabel || fieldIdentifier}${fieldLabel ? ` <span class="font-normal text-gray-500">${fieldIdentifier}</span>` : ''} (${field.type})</div>`;
         
         // Show selector information as editable inputs
         html += `<div class="field-selector my-1.5 box-border rounded-[3px] bg-gray-100 p-1.5 text-[11px] text-gray-600">`;
