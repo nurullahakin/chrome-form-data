@@ -562,7 +562,7 @@ async function viewSavedForms() {
     }
     
     let tableHtml = `
-      <table class="saved-forms-table mt-2.5 w-full border-collapse text-[13px]">
+      <table class="saved-forms-table w-full border-collapse text-[13px]">
         <thead>
           <tr>
             <th class="sticky top-0 w-6 bg-green-600 px-1 py-2.5"></th>
@@ -580,19 +580,16 @@ async function viewSavedForms() {
       formData.forms.forEach((form, formIndex) => {
         const fieldCount = form.fields.length;
         const formName = form.formName || form.formId || `Form ${form.formIndex + 1}`;
-        const date = new Date(formData.timestamp).toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
+        // ISO-style local date and time, e.g. 2026-10-26 14:30
+        const created = new Date(formData.timestamp);
+        const pad = n => String(n).padStart(2, '0');
+        const date = `${created.getFullYear()}-${pad(created.getMonth() + 1)}-${pad(created.getDate())} ${pad(created.getHours())}:${pad(created.getMinutes())}`;
         
         tableHtml += `
           <tr class="form-row hover:bg-gray-100" data-entry="${entryIndex}" data-form="${formIndex}">
             <td class="drag-handle w-6 cursor-grab select-none border-b border-gray-300 px-1 py-2 text-center align-middle text-gray-400 hover:text-gray-700" title="Drag to reorder">⠿</td>
             <td class="url-cell max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-blue-700" title="${formData.url}">${/^https?:\/\//i.test(formData.url) ? `<a href="${formData.url}" class="url-link text-blue-700 hover:underline">${formData.url}</a>` : formData.url}</td>
-            <td class="border-b border-gray-300 px-2 py-2 align-middle">${formName}</td>
+            <td class="max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle" title="${formName}">${formName}</td>
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
             <td class="date-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-gray-600">${date}</td>
             <td class="actions-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle">
