@@ -7,7 +7,17 @@ document.addEventListener('DOMContentLoaded', function() {
   
   scanBtn.addEventListener('click', extractFormData);
   cancelBtn.addEventListener('click', viewSavedForms);
-  
+
+  const importFile = document.getElementById('importFile');
+  document.getElementById('exportBtn').addEventListener('click', exportSavedForms);
+  document.getElementById('importBtn').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', () => {
+    if (importFile.files[0]) {
+      importSavedForms(importFile.files[0]);
+    }
+    importFile.value = '';
+  });
+
   // Automatically load saved forms list on popup open
   viewSavedForms();
 });
@@ -777,5 +787,61 @@ async function deleteForm(entryIndex, formIndex) {
   } catch (error) {
     console.error('Error deleting form:', error);
     showStatus('Error deleting form: ' + error.message, 'error');
+  }
+}
+
+async function exportSavedForms() {
+  try {
+    const result = await chrome.storage.local.get(['savedForms']);
+    const savedForms = result.savedForms || [];
+    
+    if (savedForms.length === 0) {
+      showStatus('No saved forms to export', 'error');
+      return;
+    }
+    
+    const blob = new Blob([JSON.stringify(savedForms, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `form-data-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    showStatus(`Exported ${savedForms.length} entr${savedForms.length !== 1 ? 'ies' : 'y'}`, 'success');
+  } catch (error) {
+    console.error('Error exporting forms:', error);
+    showStatus('Error exporting: ' + error.message, 'error');
+  }
+}
+
+async function importSavedForms(file) {
+  try {
+    const imported = JSON.parse(await file.text());
+    
+    const isValid = Array.isArray(imported) && imported.every(entry =>
+      entry && typeof entry.url === 'string' && Array.isArray(entry.forms) &&
+      entry.forms.every(form => form && Array.isArray(form.fields))
+    );
+    if (!isValid) {
+      showStatus('Invalid file: not a form data export', 'error');
+      return;
+    }
+    
+    const result = await chrome.storage.local.get(['savedForms']);
+    const savedForms = result.savedForms || [];
+    
+    // Merge, skipping entries that are already saved
+    const existing = new Set(savedForms.map(entry => JSON.stringify(entry)));
+    const newEntries = imported.filter(entry => !existing.has(JSON.stringify(entry)));
+    savedForms.push(...newEntries);
+    
+    await chrome.storage.local.set({ savedForms: savedForms });
+    showStatus(`Imported ${newEntries.length} entr${newEntries.length !== 1 ? 'ies' : 'y'}` +
+      (newEntries.length < imported.length ? ` (${imported.length - newEntries.length} already saved)` : ''), 'success');
+    viewSavedForms();
+  } catch (error) {
+    console.error('Error importing forms:', error);
+    showStatus('Error importing: ' + error.message, 'error');
   }
 }
