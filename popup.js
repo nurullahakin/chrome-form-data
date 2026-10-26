@@ -597,6 +597,7 @@ async function viewSavedForms() {
             <td class="date-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-gray-600">${date}</td>
             <td class="actions-cell whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle">
               <button class="table-btn fill-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-green-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-green-700" data-entry="${entryIndex}" data-form="${formIndex}">Fill</button>
+              <button class="table-btn view-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-sky-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-sky-700" data-entry="${entryIndex}" data-form="${formIndex}">View</button>
               <button class="table-btn edit-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-amber-400 px-2 py-1 text-[11px] font-bold text-gray-900 hover:bg-amber-500" data-entry="${entryIndex}" data-form="${formIndex}">Edit</button>
               <button class="table-btn delete-btn mx-0.5 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" data-entry="${entryIndex}" data-form="${formIndex}">Delete</button>
             </td>
@@ -625,6 +626,10 @@ async function viewSavedForms() {
       btn.addEventListener('click', () => fillForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
     });
     
+    container.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => viewForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
+    });
+
     container.querySelectorAll('.edit-btn').forEach(btn => {
       btn.addEventListener('click', () => editForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
     });
@@ -805,6 +810,81 @@ function fillFormOnPage(formData) {
   });
   
   return filledCount;
+}
+
+// Read-only summary of a saved form as label: value pairs
+async function viewForm(entryIndex, formIndex) {
+  try {
+    const result = await chrome.storage.local.get(['savedForms']);
+    const savedForms = result.savedForms || [];
+    const entry = savedForms[entryIndex];
+    const form = entry && entry.forms[formIndex];
+
+    if (!form) {
+      showStatus('Form data not found', 'error');
+      return;
+    }
+
+    const escapeHtml = text => String(text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const formName = form.formName || form.formId || `Form ${form.formIndex + 1}`;
+
+    const rows = form.fields
+      .filter(field => field.type !== 'file')
+      .map(field => {
+        const key = escapeHtml(field.label || field.name || field.id || `${field.type} field`);
+        let value;
+        if (field.type === 'checkbox' || field.type === 'radio') {
+          value = field.checked ? '✓ Checked' : '<span class="text-gray-400">Unchecked</span>';
+        } else if (!field.value) {
+          value = '<span class="text-gray-400">—</span>';
+        } else if (field.type === 'password') {
+          value = `<span class="password-mask cursor-pointer text-red-700" title="Click to reveal" data-value="${escapeHtml(field.value)}">••••••••</span>`;
+        } else {
+          value = `<span class="whitespace-pre-wrap break-words">${escapeHtml(field.value)}</span>`;
+        }
+        return `
+          <tr>
+            <td class="w-[35%] border-b border-gray-200 py-1.5 pr-3 align-top font-bold text-gray-700">${key}</td>
+            <td class="border-b border-gray-200 py-1.5 align-top text-gray-900">${value}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    // Hide scan/export/import while viewing
+    document.querySelector('.bottom-actions').classList.add('hidden');
+    hideSaveSection();
+
+    const container = document.getElementById('formDataContainer');
+    container.innerHTML = `
+      <div class="rounded-[4px] border border-gray-300 bg-gray-50 p-[15px]">
+        <div class="mb-1 text-[15px] font-bold text-gray-800">${escapeHtml(formName)}</div>
+        <div class="mb-3 break-all text-[11px] text-blue-700">${escapeHtml(entry.url)}</div>
+        ${rows
+          ? `<table class="w-full border-collapse text-[13px]"><tbody>${rows}</tbody></table>`
+          : '<p class="text-gray-500">No fields</p>'}
+        <div class="mt-4 text-left">
+          <button class="view-edit-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-amber-400 px-3 py-1.5 text-xs font-bold text-gray-900 hover:bg-amber-500">Edit</button>
+          <button class="view-back-btn inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-600">Back</button>
+        </div>
+      </div>
+    `;
+
+    container.querySelectorAll('.password-mask').forEach(mask => {
+      mask.addEventListener('click', () => {
+        mask.textContent = mask.dataset.value;
+        mask.classList.remove('cursor-pointer');
+        mask.removeAttribute('title');
+      }, { once: true });
+    });
+    container.querySelector('.view-edit-btn').addEventListener('click', () => editForm(entryIndex, formIndex));
+    container.querySelector('.view-back-btn').addEventListener('click', viewSavedForms);
+
+  } catch (error) {
+    console.error('Error viewing form:', error);
+    showStatus('Error: ' + error.message, 'error');
+  }
 }
 
 async function editForm(entryIndex, formIndex) {
