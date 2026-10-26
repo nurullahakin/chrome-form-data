@@ -265,6 +265,14 @@ function extractFormsFromPage() {
   return formDataArray;
 }
 
+function fieldHeadingHtml(field) {
+  const fieldIdentifier = field.name || field.id || `${field.type} field`;
+  const fieldLabel = field.label
+    ? field.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    : '';
+  return `${fieldLabel || fieldIdentifier}${fieldLabel ? ` <span class="font-normal text-gray-500">${fieldIdentifier}</span>` : ''} (${field.type})`;
+}
+
 function displayFormData(data) {
   const container = document.getElementById('formDataContainer');
   container.innerHTML = '';
@@ -304,10 +312,6 @@ function displayFormData(data) {
       html += '<p class="text-gray-500">No fields found</p>';
     } else {
       form.fields.forEach((field, fieldIndex) => {
-        const fieldIdentifier = field.name || field.id || `${field.type} field`;
-        const fieldLabel = field.label
-          ? field.label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-          : '';
         const dataAttr = `data-form="${formIndex}" data-field="${fieldIndex}"`;
         const isPasswordField = field.type === 'password';
         const fieldItemClass = isPasswordField
@@ -316,7 +320,7 @@ function displayFormData(data) {
         
         html += `<div class="${fieldItemClass}" ${dataAttr}>`;
         html += `<button class="delete-field-btn absolute right-2 top-2 cursor-pointer rounded-[3px] border-0 bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-700" ${dataAttr}>Delete</button>`;
-        html += `<div class="field-name mb-[3px] font-bold ${isPasswordField ? 'text-red-700' : 'text-gray-800'}">${fieldLabel || fieldIdentifier}${fieldLabel ? ` <span class="font-normal text-gray-500">${fieldIdentifier}</span>` : ''} (${field.type})</div>`;
+        html += `<div class="field-name mb-[3px] font-bold ${isPasswordField ? 'text-red-700' : 'text-gray-800'}" ${dataAttr}>${fieldHeadingHtml(field)}</div>`;
         
         // Show selector information as editable inputs
         html += `<div class="field-selector my-1.5 box-border rounded-[3px] bg-gray-100 p-1.5 text-[11px] text-gray-600">`;
@@ -360,7 +364,8 @@ function displayFormData(data) {
     html += `
       <div class="mt-4 text-left">
         ${data.editMode
-          ? '<button class="update-form-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Update Form Data</button>'
+          ? `<button class="update-form-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700">Update Form Data</button>
+             <button class="rescan-labels-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-100" title="Re-read field labels from the current tab">Rescan Labels</button>`
           : `<button class="save-form-btn mr-2.5 inline-block cursor-pointer rounded-[4px] border-0 bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700" data-form-index="${formIndex}">Save This Form</button>`}
         <button class="cancel-form-btn inline-block cursor-pointer rounded-[4px] border-0 bg-gray-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-600">Cancel</button>
       </div>
@@ -383,6 +388,13 @@ function displayFormData(data) {
     btn.addEventListener('click', function(e) {
       e.preventDefault();
       updateFormData();
+    });
+  });
+
+  container.querySelectorAll('.rescan-labels-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      rescanLabels();
     });
   });
 
@@ -913,5 +925,61 @@ async function importSavedForms(file) {
   } catch (error) {
     console.error('Error importing forms:', error);
     showStatus('Error importing: ' + error.message, 'error');
+  }
+}
+
+// Re-read labels from the current tab for the form being edited, keeping
+// values and any unsaved edits on screen intact
+async function rescanLabels() {
+  if (!currentFormData || !currentFormData.editMode) {
+    return;
+  }
+  
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('edge://')) {
+      showStatus('Open the form\'s page in the current tab, then rescan', 'error');
+      return;
+    }
+    
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      function: extractFormsFromPage
+    });
+    const scannedFields = (results?.[0]?.result || []).flatMap(form => form.fields);
+    
+    if (scannedFields.length === 0) {
+      showStatus('No form fields found on the current tab', 'error');
+      return;
+    }
+    
+    // Match saved fields to scanned ones, most specific identifier first
+    const findMatch = field =>
+      (field.xpath && scannedFields.find(f => f.xpath === field.xpath)) ||
+      (field.selector && scannedFields.find(f => f.selector === field.selector)) ||
+      (field.id && scannedFields.find(f => f.id === field.id)) ||
+      (field.name && scannedFields.find(f => f.name === field.name && f.type === field.type));
+    
+    let matched = 0;
+    let total = 0;
+    currentFormData.forms.forEach((form, formIndex) => {
+      form.fields.forEach((field, fieldIndex) => {
+        const heading = document.querySelector(`.field-name[data-form="${formIndex}"][data-field="${fieldIndex}"]`);
+        if (!heading) return; // field deleted in the editor
+        
+        total++;
+        const match = findMatch(field);
+        if (match && match.label) {
+          field.label = match.label;
+          heading.innerHTML = fieldHeadingHtml(field);
+          matched++;
+        }
+      });
+    });
+    
+    showStatus(`Found labels for ${matched} of ${total} field${total !== 1 ? 's' : ''}. Click Update to save.`, matched ? 'success' : 'info');
+  } catch (error) {
+    console.error('Error rescanning labels:', error);
+    showStatus('Error rescanning: ' + error.message, 'error');
   }
 }
