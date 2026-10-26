@@ -565,6 +565,7 @@ async function viewSavedForms() {
       <table class="saved-forms-table mt-2.5 w-full border-collapse text-[13px]">
         <thead>
           <tr>
+            <th class="sticky top-0 w-6 bg-green-600 px-1 py-2.5"></th>
             <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">URL</th>
             <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Form Name</th>
             <th class="sticky top-0 bg-green-600 px-2 py-2.5 text-left font-bold text-white">Fields</th>
@@ -588,7 +589,8 @@ async function viewSavedForms() {
         });
         
         tableHtml += `
-          <tr class="hover:bg-gray-100">
+          <tr class="form-row hover:bg-gray-100" data-entry="${entryIndex}" data-form="${formIndex}">
+            <td class="drag-handle w-6 cursor-grab select-none border-b border-gray-300 px-1 py-2 text-center align-middle text-gray-400 hover:text-gray-700" title="Drag to reorder">⠿</td>
             <td class="url-cell max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap border-b border-gray-300 px-2 py-2 align-middle text-[11px] text-blue-700" title="${formData.url}">${/^https?:\/\//i.test(formData.url) ? `<a href="${formData.url}" class="url-link text-blue-700 hover:underline">${formData.url}</a>` : formData.url}</td>
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${formName}</td>
             <td class="border-b border-gray-300 px-2 py-2 align-middle">${fieldCount} field${fieldCount !== 1 ? 's' : ''}</td>
@@ -630,11 +632,79 @@ async function viewSavedForms() {
     container.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', () => deleteForm(parseInt(btn.dataset.entry), parseInt(btn.dataset.form)));
     });
-    
+
+    setupRowDragAndDrop(container.querySelector('tbody'), savedForms);
+
   } catch (error) {
     console.error('Error loading saved forms:', error);
     showStatus('Error loading saved forms: ' + error.message, 'error');
   }
+}
+
+function setupRowDragAndDrop(tbody, savedForms) {
+  let draggedRow = null;
+
+  // Only start dragging from the handle, so links, buttons and text selection keep working
+  tbody.querySelectorAll('.drag-handle').forEach(handle => {
+    handle.addEventListener('mousedown', () => handle.parentElement.setAttribute('draggable', 'true'));
+    handle.addEventListener('mouseup', () => handle.parentElement.removeAttribute('draggable'));
+  });
+
+  tbody.addEventListener('dragstart', (e) => {
+    draggedRow = e.target.closest('.form-row');
+    if (!draggedRow) return;
+    e.dataTransfer.effectAllowed = 'move';
+    draggedRow.classList.add('opacity-40');
+  });
+
+  tbody.addEventListener('dragover', (e) => {
+    if (!draggedRow) return;
+    e.preventDefault();
+    const targetRow = e.target.closest('.form-row');
+    if (!targetRow || targetRow === draggedRow) return;
+
+    // Insert above or below the target depending on which half the cursor is in
+    const rect = targetRow.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    tbody.insertBefore(draggedRow, after ? targetRow.nextSibling : targetRow);
+  });
+
+  tbody.addEventListener('drop', (e) => e.preventDefault());
+
+  tbody.addEventListener('dragend', async () => {
+    if (!draggedRow) return;
+    draggedRow.classList.remove('opacity-40');
+    draggedRow.removeAttribute('draggable');
+    draggedRow = null;
+
+    const order = Array.from(tbody.querySelectorAll('.form-row'))
+      .map(row => [parseInt(row.dataset.entry), parseInt(row.dataset.form)]);
+    const unchanged = order.every(([entry, form], i, arr) =>
+      i === 0 || entry > arr[i - 1][0] || (entry === arr[i - 1][0] && form > arr[i - 1][1]));
+    if (unchanged) return;
+
+    // Rebuild entries in the new order; consecutive rows from the same entry stay grouped
+    const reordered = [];
+    let previousEntry = null;
+    order.forEach(([entryIndex, formIndex]) => {
+      const entry = savedForms[entryIndex];
+      if (entryIndex === previousEntry) {
+        reordered[reordered.length - 1].forms.push(entry.forms[formIndex]);
+      } else {
+        reordered.push({ ...entry, forms: [entry.forms[formIndex]] });
+      }
+      previousEntry = entryIndex;
+    });
+
+    try {
+      await chrome.storage.local.set({ savedForms: reordered });
+    } catch (error) {
+      console.error('Error saving order:', error);
+      showStatus('Error saving order: ' + error.message, 'error');
+    }
+    // Re-render so row indices match storage again
+    viewSavedForms();
+  });
 }
 
 async function fillForm(entryIndex, formIndex) {
